@@ -51,7 +51,7 @@ namespace Backend.Services
                 string message = Encoding.UTF8.GetString(buffer, 0, result.Count);
 
                 Request? loginRequest = JsonSerializer.Deserialize<Request>(message);
-                if (loginRequest == null || loginRequest.Type != RequestType.Login)
+                if (loginRequest == null || loginRequest.Message != RequestMessage.Login)
                 {
                     await NotifySocket(webSocket, "Invalid login request.");
                     return;
@@ -105,24 +105,24 @@ namespace Backend.Services
 
                     WebSocketReceiveResult result = await webSocket.ReceiveAsync(buffer, CancellationToken.None);
                     string message = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                    Request? incomingRequest = JsonSerializer.Deserialize<Request>(message);
+                    Request? request = JsonSerializer.Deserialize<Request>(message);
 
-                    if (incomingRequest == null)
+                    if (request == null)
                     {
                         await NotifySocket(webSocket, "Unknown request type");
                         continue;
                     }
 
-                    switch (incomingRequest.Type)
+                    switch (request.Message)
                     {
-                        case RequestType.Login:
+                        case RequestMessage.Login:
                             await NotifySocket(webSocket, "Already logged in.");
                             break;
-                        case RequestType.Add:
-                            await HandleAdd(payerId, incomingRequest);
+                        case RequestMessage.Gift:
+                            await HandleGift(payerId, request);
                             break;
-                        case RequestType.Gift:
-                            await HandleGift(payerId, incomingRequest);
+                        case RequestMessage.Update:
+                            await HandleUpdate(payerId, request);
                             break;
                         default:
                             await NotifySocket(webSocket, "Unknown request type");
@@ -141,15 +141,22 @@ namespace Backend.Services
             }
         }
 
-        private async Task HandleAdd(int payerId, Request request)
+        private async Task HandleUpdate(int payerId, Request request)
         {
-            if (request.Amount <= 0)
+            if (request.Resource != null && request.Resource.Amount > 0)
             {
-                await NotifyPayer(payerId, "Amount to add must be positive.");
+                User? user = userRepository.UpdateBalance(payerId, request.Resource.Amount, request.Resource.Type);
+                if (user == null)
+                {
+                    await NotifyPayer(payerId, "User not found.");
+                    return;
+                }
+
+                await NotifyPayer(payerId, $"New balance: rolls {user.Rolls}, coins {user.Coins}.");
             }
             else
             {
-                await NotifyPayer(payerId, $"Added {request.Amount} to your account.");
+                await NotifyPayer(payerId, "Amount to add must be positive.");
             }
         }
 
