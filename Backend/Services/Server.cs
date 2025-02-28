@@ -32,7 +32,7 @@ namespace Backend.Services
         {
             if (context.WebSockets.IsWebSocketRequest)
             {
-                using var webSocket = await context.WebSockets.AcceptWebSocketAsync();
+                WebSocket webSocket = await context.WebSockets.AcceptWebSocketAsync();
                 await ProcessLoginRequest(webSocket);
             }
             else
@@ -43,11 +43,11 @@ namespace Backend.Services
 
         private async Task ProcessLoginRequest(WebSocket webSocket)
         {
-            var buffer = new byte[1024 * 4];
-
             try
             {
-                var result = await webSocket.ReceiveAsync(buffer, CancellationToken.None);
+                byte[] buffer = new byte[1024 * 4];
+
+                WebSocketReceiveResult result = await webSocket.ReceiveAsync(buffer, CancellationToken.None);
                 string message = Encoding.UTF8.GetString(buffer, 0, result.Count);
                 Request? loginRequest = JsonSerializer.Deserialize<Request>(message);
 
@@ -57,7 +57,7 @@ namespace Backend.Services
                     return;
                 }
 
-                string payerId = await HandleLogin(loginRequest, webSocket);
+                string? payerId = await HandleLogin(loginRequest, webSocket);
                 if (payerId != null)
                 {
                     await ProcessWebSocketMessages(payerId, webSocket);
@@ -71,8 +71,13 @@ namespace Backend.Services
 
         private async Task<string?> HandleLogin(Request request, WebSocket webSocket)
         {
-            var user = userRepository.GetUserByToken(request.Token);
+            if (request.Token == null)
+            {
+                await SendResponse(webSocket, "Missing token.");
+                return null;
+            }
 
+            User? user = userRepository.GetUserByToken(request.Token);
             if (user == null)
             {
                 await SendResponse(webSocket, "User not found.");
@@ -92,13 +97,13 @@ namespace Backend.Services
 
         private async Task ProcessWebSocketMessages(string payerId, WebSocket webSocket)
         {
-            var buffer = new byte[1024 * 4];
-
             try
             {
                 while (webSocket.State == WebSocketState.Open)
                 {
-                    var result = await webSocket.ReceiveAsync(buffer, CancellationToken.None);
+                    byte[] buffer = new byte[1024 * 4];
+
+                    WebSocketReceiveResult result = await webSocket.ReceiveAsync(buffer, CancellationToken.None);
                     string message = Encoding.UTF8.GetString(buffer, 0, result.Count);
                     Request? incomingRequest = JsonSerializer.Deserialize<Request>(message);
 
@@ -166,15 +171,15 @@ namespace Backend.Services
 
         private async Task SendResponse(WebSocket webSocket, string message)
         {
-            var responseMessage = Encoding.UTF8.GetBytes(message);
+            byte[] responseMessage = Encoding.UTF8.GetBytes(message);
             await webSocket.SendAsync(responseMessage, WebSocketMessageType.Text, true, CancellationToken.None);
         }
 
         private async Task SendResponse(string payerId, string message)
         {
-            if (connections.TryGetValue(payerId, out var webSocket))
+            if (connections.TryGetValue(payerId, out WebSocket? webSocket))
             {
-                var responseMessage = Encoding.UTF8.GetBytes(message);
+                byte[] responseMessage = Encoding.UTF8.GetBytes(message);
                 await webSocket.SendAsync(responseMessage, WebSocketMessageType.Text, true, CancellationToken.None);
             }
         }

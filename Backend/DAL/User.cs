@@ -8,7 +8,6 @@ namespace Backend.DAL
 
         public UserRepository()
         {
-            // Simulating an in-memory user database
             users = new Dictionary<string, User>
             {
                 { "user1", new User { PayerId = "user1", Token = "udid123" } },
@@ -17,12 +16,9 @@ namespace Backend.DAL
             };
         }
 
-        // Method to get user by token
         public User? GetUserByToken(string token)
         {
             return users.Values.FirstOrDefault(u => u.Token == token);
         }
-
-        // Add more data access methods if needed
     }
 }

@@ -9,9 +9,9 @@ namespace Backend.Models
 
     public class Request
     {
-        public string Type { get; set; }
-        public string Token { get; set; }
+        public string? Type { get; set; }
+        public string? Token { get; set; }
         public decimal Amount { get; set; }
-        public string RecipientId { get; set; }
+        public string? RecipientId { get; set; }
     }
 }
