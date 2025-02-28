@@ -10,7 +10,7 @@ namespace Backend.Services
     public class Server
     {
         private readonly WebApplication app;
-        private readonly ConcurrentDictionary<string, WebSocket> connections = new();
+        private readonly ConcurrentDictionary<int, WebSocket> socketsMap = new();
         private readonly UserRepository userRepository;
 
         public Server(UserRepository userRepository)
@@ -49,53 +49,53 @@ namespace Backend.Services
 
                 WebSocketReceiveResult result = await webSocket.ReceiveAsync(buffer, CancellationToken.None);
                 string message = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                Request? loginRequest = JsonSerializer.Deserialize<Request>(message);
 
+                Request? loginRequest = JsonSerializer.Deserialize<Request>(message);
                 if (loginRequest == null || loginRequest.Type != RequestType.Login)
                 {
-                    await SendResponse(webSocket, "Invalid login request.");
+                    await NotifySocket(webSocket, "Invalid login request.");
                     return;
                 }
 
-                string? payerId = await HandleLogin(loginRequest, webSocket);
+                int? payerId = await HandleLogin(loginRequest, webSocket);
                 if (payerId != null)
                 {
-                    await ProcessWebSocketMessages(payerId, webSocket);
+                    await ProcessWebSocketMessages((int)payerId, webSocket);
                 }
             }
             catch (Exception ex)
             {
-                await SendResponse(webSocket, $"Error: {ex.Message}");
+                await NotifySocket(webSocket, $"Error: {ex.Message}");
             }
         }
 
-        private async Task<string?> HandleLogin(Request request, WebSocket webSocket)
+        private async Task<int?> HandleLogin(Request request, WebSocket webSocket)
         {
-            if (request.Token == null)
+            if (request.UDID == null)
             {
-                await SendResponse(webSocket, "Missing token.");
+                await NotifySocket(webSocket, "Missing UDID.");
                 return null;
             }
 
-            User? user = userRepository.GetUserByToken(request.Token);
+            User? user = userRepository.GetUserByUDID(request.UDID);
             if (user == null)
             {
-                await SendResponse(webSocket, "User not found.");
+                await NotifySocket(webSocket, "User not found.");
                 return null;
             }
 
-            if (connections.ContainsKey(user.PayerId))
+            if (socketsMap.ContainsKey(user.PayerId))
             {
-                await SendResponse(webSocket, "User is already connected.");
+                await NotifySocket(webSocket, "User is already connected.");
                 return null;
             }
 
-            connections[user.PayerId] = webSocket;
-            await SendResponse(webSocket, "Login successful.");
+            socketsMap[user.PayerId] = webSocket;
+            await NotifySocket(webSocket, "Login successful.");
             return user.PayerId;
         }
 
-        private async Task ProcessWebSocketMessages(string payerId, WebSocket webSocket)
+        private async Task ProcessWebSocketMessages(int payerId, WebSocket webSocket)
         {
             try
             {
@@ -109,14 +109,14 @@ namespace Backend.Services
 
                     if (incomingRequest == null)
                     {
-                        await SendResponse(payerId, "Unknown request type");
+                        await NotifySocket(webSocket, "Unknown request type");
                         continue;
                     }
 
                     switch (incomingRequest.Type)
                     {
                         case RequestType.Login:
-                            await SendResponse(payerId, "Already logged in.");
+                            await NotifySocket(webSocket, "Already logged in.");
                             break;
                         case RequestType.Add:
                             await HandleAdd(payerId, incomingRequest);
@@ -125,59 +125,59 @@ namespace Backend.Services
                             await HandleGift(payerId, incomingRequest);
                             break;
                         default:
-                            await SendResponse(payerId, "Unknown request type");
+                            await NotifySocket(webSocket, "Unknown request type");
                             break;
                     }
                 }
             }
             catch (Exception ex)
             {
-                await SendResponse(payerId, $"Error: {ex.Message}");
+                await NotifySocket(webSocket, $"Error: {ex.Message}");
             }
             finally
             {
-                connections.TryRemove(payerId, out _);
+                socketsMap.TryRemove(payerId, out _);
                 await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Connection closed", CancellationToken.None);
             }
         }
 
-        private async Task HandleAdd(string payerId, Request request)
+        private async Task HandleAdd(int payerId, Request request)
         {
             if (request.Amount <= 0)
             {
-                await SendResponse(payerId, "Amount to add must be positive.");
+                await NotifyPayer(payerId, "Amount to add must be positive.");
             }
             else
             {
-                await SendResponse(payerId, $"Added {request.Amount} to your account.");
+                await NotifyPayer(payerId, $"Added {request.Amount} to your account.");
             }
         }
 
-        private async Task HandleGift(string payerId, Request request)
+        private async Task HandleGift(int payerId, Request request)
         {
             if (string.IsNullOrEmpty(request.RecipientId))
             {
-                await SendResponse(payerId, "RecipientId is required for gifting.");
+                await NotifyPayer(payerId, "RecipientId is required for gifting.");
             }
             else if (request.Amount <= 0)
             {
-                await SendResponse(payerId, "Gift amount must be positive.");
+                await NotifyPayer(payerId, "Gift amount must be positive.");
             }
             else
             {
-                await SendResponse(payerId, $"Gifted {request.Amount} to user {request.RecipientId}.");
+                await NotifyPayer(payerId, $"Gifted {request.Amount} to user {request.RecipientId}.");
             }
         }
 
-        private async Task SendResponse(WebSocket webSocket, string message)
+        private async Task NotifySocket(WebSocket webSocket, string message)
         {
             byte[] responseMessage = Encoding.UTF8.GetBytes(message);
             await webSocket.SendAsync(responseMessage, WebSocketMessageType.Text, true, CancellationToken.None);
         }
 
-        private async Task SendResponse(string payerId, string message)
+        private async Task NotifyPayer(int payerId, string message)
         {
-            if (connections.TryGetValue(payerId, out WebSocket? webSocket))
+            if (socketsMap.TryGetValue(payerId, out WebSocket? webSocket))
             {
                 byte[] responseMessage = Encoding.UTF8.GetBytes(message);
                 await webSocket.SendAsync(responseMessage, WebSocketMessageType.Text, true, CancellationToken.None);

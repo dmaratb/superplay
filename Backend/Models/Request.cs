@@ -10,7 +10,7 @@ namespace Backend.Models
     public class Request
     {
         public string? Type { get; set; }
-        public string? Token { get; set; }
+        public string? UDID { get; set; }
         public decimal Amount { get; set; }
         public string? RecipientId { get; set; }
     }

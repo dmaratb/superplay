@@ -1,24 +1,18 @@
 using Backend.Models;
+using SQLite;
 
 namespace Backend.DAL
 {
     public class UserRepository
     {
-        private readonly Dictionary<string, User> users;
-
-        public UserRepository()
+        private readonly SQLiteConnection connection; public UserRepository(string dbPath)
         {
-            users = new Dictionary<string, User>
-            {
-                { "user1", new User { PayerId = "user1", Token = "udid123" } },
-                { "user2", new User { PayerId = "user2", Token = "udid456" } },
-                { "user3", new User { PayerId = "user3", Token = "udid789" } }
-            };
+            connection = new(dbPath);
+            connection.CreateTable<User>();
         }
-
-        public User? GetUserByToken(string token)
+        public User? GetUserByUDID(string UDID)
         {
-            return users.Values.FirstOrDefault(u => u.Token == token);
+            return connection.Table<User>().FirstOrDefault(u => u.UDID == UDID);
         }
     }
 }
