@@ -1,44 +1,51 @@
+using System.Net.WebSockets;
+using System.Text;
+
 var builder = WebApplication.CreateBuilder(args);
-
-// Add services to the container.
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
-
 var app = builder.Build();
+Server server = new(app);
+await server.Start();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+class Server(WebApplication webApp)
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+    private readonly WebApplication webApp = webApp;
 
-app.UseHttpsRedirection();
+    internal async Task Start()
+    {
+        this.webApp.UseWebSockets();
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
+        this.webApp.MapGet("/", () => "WebSocket Server is running!");
 
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast")
-.WithOpenApi();
+        this.webApp.Use(ProcessRequest);
 
-app.Run();
+        await this.webApp.RunAsync();
+    }
 
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
+
+
+    private async Task ProcessRequest(HttpContext context, RequestDelegate next)
+    {
+        if (context.WebSockets.IsWebSocketRequest)
+        {
+            using var webSocket = await context.WebSockets.AcceptWebSocketAsync(); while (webSocket.State == WebSocketState.Open)
+            {
+                var buffer = new byte[1024 * 4];
+                var result = await webSocket.ReceiveAsync(buffer, CancellationToken.None);
+
+                if (result.MessageType == WebSocketMessageType.Text)
+                {
+                    var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                    Console.WriteLine(message);
+                }
+                else
+                {
+                    Console.WriteLine("not text");
+                }
+            }
+        }
+        else
+        {
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+        }
+    }
 }
