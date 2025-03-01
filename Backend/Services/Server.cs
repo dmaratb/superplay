@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
+using Serilog;
 
 namespace Backend.Services
 {
@@ -17,6 +18,8 @@ namespace Backend.Services
             app.UseWebSockets();
             app.Map("/ws", HandleWebSocket);
             app.MapGet("/", () => "WebSocket Server is running!");
+
+            Log.Information("WebSocket server started.");
         }
 
         private async Task HandleWebSocket(HttpContext context)
@@ -24,6 +27,7 @@ namespace Backend.Services
             if (context.WebSockets.IsWebSocketRequest)
             {
                 WebSocket webSocket = await context.WebSockets.AcceptWebSocketAsync();
+                Log.Information("WebSocket connection established.");
                 await ProcessRequest(webSocket);
             }
             else
@@ -52,6 +56,7 @@ namespace Backend.Services
             }
             catch (Exception ex)
             {
+                Log.Error(ex, "Error processing WebSocket request.");
                 await NotifySocket(webSocket, $"Error: {ex.Message}");
             }
         }
@@ -77,6 +82,7 @@ namespace Backend.Services
                         await HandleUpdate(payerId, request);
                         break;
                     default:
+                        Log.Warning("Unknown request type: {Message}", request.Message);
                         await NotifySocket(webSocket, "Unknown request type");
                         break;
                 }
@@ -91,7 +97,10 @@ namespace Backend.Services
             if (socketsMap.ContainsKey(user.PayerId)) throw new Exception("User is already connected.");
 
             socketsMap[user.PayerId] = webSocket;
+
+            Log.Information("User {PayerId} logged in successfully.", user.PayerId);
             await NotifySocket(webSocket, "Login successful.");
+
             return user.PayerId;
         }
         private async Task HandleUpdate(int payerId, Request request)
