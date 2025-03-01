@@ -21,7 +21,7 @@ namespace Backend.Models
     {
         public int Amount { get; set; }
         public string? Message { get; set; }
-        public string? RecipientId { get; set; }
+        public int? RecipientId { get; set; }
         public Resource? Resource { get; set; }
         public string? UDID { get; set; }
     }
