@@ -7,25 +7,16 @@ using System.Text.Json;
 
 namespace Backend.Services
 {
-    public class Server
+    public class Server(UserRepository userRepository)
     {
-        private readonly WebApplication app;
         private readonly ConcurrentDictionary<int, WebSocket> socketsMap = new();
-        private readonly UserRepository userRepository;
+        private readonly UserRepository userRepository = userRepository;
 
-        public Server(UserRepository userRepository)
-        {
-            WebApplicationBuilder builder = WebApplication.CreateBuilder();
-            app = builder.Build();
-            this.userRepository = userRepository;
-        }
-
-        public async Task Start()
+        public void Start(WebApplication app)
         {
             app.UseWebSockets();
             app.Map("/ws", HandleWebSocket);
             app.MapGet("/", () => "WebSocket Server is running!");
-            await app.RunAsync();
         }
 
         private async Task HandleWebSocket(HttpContext context)
@@ -52,7 +43,6 @@ namespace Backend.Services
 
                 Request? loginRequest = JsonSerializer.Deserialize<Request>(message);
                 if (loginRequest == null || loginRequest.Message != RequestMessage.Login) throw new Exception("Not logged in.");
-
 
                 int? payerId = await HandleLogin(loginRequest, webSocket);
                 if (payerId != null)
@@ -117,7 +107,6 @@ namespace Backend.Services
             if (request.RecipientId == null) throw new Exception("RecipientId is required for gifting.");
             if (request.Resource == null) throw new Exception("Resource is mandatory.");
             if (request.Resource.Amount <= 0) throw new Exception("Gift amount must be positive.");
-
 
             userRepository.TransferResource(payerId, (int)request.RecipientId, request.Resource.Amount, request.Resource.Type);
 

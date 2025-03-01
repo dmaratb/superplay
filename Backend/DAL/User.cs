@@ -5,9 +5,10 @@ namespace Backend.DAL
 {
     public class UserRepository
     {
-        private readonly SQLiteConnection connection; public UserRepository(string dbPath)
+        private readonly SQLiteConnection connection;
+        public UserRepository(SQLiteConnection connection)
         {
-            connection = new(dbPath);
+            this.connection = connection;
             connection.CreateTable<User>();
         }
         private User? GetUserByID(int payerId)
